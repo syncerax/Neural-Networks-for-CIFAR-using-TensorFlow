@@ -1,4 +1,6 @@
 import pickle
+import numpy as np
+import matplotlib.pyplot as plt
 
 def unpickle(file, encoding='bytes'):
     with open(file, 'rb') as fptr:
@@ -8,7 +10,7 @@ def unpickle(file, encoding='bytes'):
 def preprocess(data):
     m = data.shape[0]
     data = data / 255
-    data = np.reshape(data, (m, 32, 32, 3))
+    data = data.reshape(m, 3, 32, 32).transpose([0, 2, 3, 1])
     return data
 
 def one_hot_encode(labels, num_classes):
@@ -27,3 +29,6 @@ print("Shape of training images:", X_train.shape)
 print("Shape of training labels:", Y_train.shape)
 print("Shape of testing images:", X_test.shape)
 print("Shape of testing labels:", Y_test.shape)
+
+plt.imshow(X_train[0])
+plt.show()
