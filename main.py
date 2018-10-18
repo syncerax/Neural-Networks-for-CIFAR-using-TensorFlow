@@ -1,6 +1,7 @@
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 def unpickle(file, encoding='bytes'):
     with open(file, 'rb') as fptr:
@@ -20,6 +21,8 @@ train_data = unpickle('cifar-100-python/train')
 test_data = unpickle('cifar-100-python/test')
 meta_data = unpickle('cifar-100-python/meta', encoding='ASCII')
 
+class_names = meta_data['fine_label_names']
+
 X_train = preprocess(train_data[b'data'])
 Y_train = one_hot_encode(train_data[b'fine_labels'], 100)
 X_test = preprocess(test_data[b'data'])
@@ -30,5 +33,14 @@ print("Shape of training labels:", Y_train.shape)
 print("Shape of testing images:", X_test.shape)
 print("Shape of testing labels:", Y_test.shape)
 
-plt.imshow(X_train[0])
+f, axarr = plt.subplots(5,5)
+for cnt1 in range(5):
+    for cnt2 in range(5):
+        num = random.randint(1,X_train.shape[0])
+        axarr[cnt1,cnt2].imshow(X_train[num])
+        axarr[cnt1,cnt2].set_title(class_names[np.argmax(Y_train[num])])
+        axarr[cnt1,cnt2].set_xticks([])
+        axarr[cnt1,cnt2].set_yticks([])
+
+f.tight_layout()
 plt.show()
