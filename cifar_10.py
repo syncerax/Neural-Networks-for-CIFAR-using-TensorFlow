@@ -7,7 +7,7 @@ from tensorflow import keras
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import Sequential
 from sklearn.model_selection import train_test_split
-
+import os
 
 def get_data():
     def unpickle(file, encoding='bytes'):
@@ -158,34 +158,48 @@ def keras_model(X_train, Y_train, epochs):
 
 
 def tensorflow_model(X_train, Y_train, epochs):
-    X = tf.placeholder(tf.float32, [None,32,32,3], name = 'X')
-    Y = tf.placeholder(tf.float32, [None,10], name = 'Y')
+    if not os.path.exists('./models/cifar10-test1.ckpt' + ".meta"):
+        brand_new = True
+        X = tf.placeholder(tf.float32, [None,32,32,3], name = 'X')
+        Y = tf.placeholder(tf.float32, [None,10], name = 'Y')
 
-    conv1 = add_conv_layer(X, [3,3], 64, [1,1,1,1], 'VALID', 'conv1')
-    conv2 = add_conv_layer(conv1, [3,3], 64, [1,1,1,1], 'VALID', 'conv2')
-    mp = tf.nn.max_pool(conv2, [1,2,2,1], [1,2,2,1], 'VALID', name = 'max_pool')
-    drop1 = tf.nn.dropout(mp, 0.25, name = 'drop1')
-    flat = tf.reshape(drop1, [-1, drop1.shape[1].value * drop1.shape[2].value * drop1.shape[3].value], name = 'flat')
-    dense = add_dense(flat, 256, name='dense1', activation='relu')
-    drop2 = tf.nn.dropout(dense, 0.5, name = 'drop2')
-    logits = add_dense(drop2, 10, name='dense2', activation='')
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=Y), name="xent")
-    train_step = tf.train.AdamOptimizer().minimize(loss)
-    predict = tf.argmax(logits, 1)
-    correct_prediction = tf.equal(predict, tf.argmax(Y, 1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        conv1 = add_conv_layer(X, [3,3], 64, [1,1,1,1], 'VALID', 'conv1')
+        conv2 = add_conv_layer(conv1, [3,3], 64, [1,1,1,1], 'VALID', 'conv2')
+        mp = tf.nn.max_pool(conv2, [1,2,2,1], [1,2,2,1], 'VALID', name = 'max_pool')
+        drop1 = tf.nn.dropout(mp, 0.25, name = 'drop1')
+        flat = tf.reshape(drop1, [-1, drop1.shape[1].value * drop1.shape[2].value * drop1.shape[3].value], name = 'flat')
+        dense = add_dense(flat, 256, name='dense1', activation='relu')
+        drop2 = tf.nn.dropout(dense, 0.5, name = 'drop2')
+        logits = add_dense(drop2, 10, name='dense2', activation='')
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=Y), name="xent")
+        train_step = tf.train.AdamOptimizer().minimize(loss)
+        predict = tf.argmax(logits, 1)
+        correct_prediction = tf.equal(predict, tf.argmax(Y, 1))
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name = "acc")
+        tf.add_to_collection("train_step", train_step)
+
+        saver = tf.train.Saver()
+    else:
+        brand_new = False
+        saver = tf.train.import_meta_graph('./models/cifar10-test1.ckpt' + ".meta")
+        g = tf.get_default_graph()
+        X = g.get_tensor_by_name("X:0")
+        Y = g.get_tensor_by_name("Y:0")
+        loss = g.get_tensor_by_name("xent:0")
+        accuracy = g.get_tensor_by_name("acc:0")
 
     with tf.variable_scope('summary'):
         tf.summary.scalar('current_cost', loss)
         tf.summary.scalar('current_accuracy', accuracy)
         summary = tf.summary.merge_all()
 
-    init = tf.global_variables_initializer()
-
-    saver = tf.train.Saver()
-
     with tf.Session() as sess:
-        sess.run(init)
+        if brand_new:
+            init = tf.global_variables_initializer()
+            sess.run(init)
+        else:
+            saver.restore(sess, './models/cifar10-test1.ckpt')
+            train_step = tf.get_collection("train_step")[0]
         training_writer = tf.summary.FileWriter("./cifar10-logs/training", sess.graph)
         for epoch in range(epochs):
             mini_batches, num_mini_batches = get_mini_batches(X_train, Y_train, 128)
@@ -200,4 +214,4 @@ def tensorflow_model(X_train, Y_train, epochs):
         save_path = saver.save(sess, './models/cifar10-test1.ckpt')
         print("Model saved at: {}".format(save_path))
 
-tensorflow_model(X_train, Y_train, 5)
+tensorflow_model(X_train, Y_train, 1)
