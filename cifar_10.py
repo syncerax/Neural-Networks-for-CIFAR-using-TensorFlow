@@ -102,8 +102,8 @@ def get_mini_batches(X, Y, mini_batch_size):
 
 def add_conv_layer(X, filter_size, num_op, stride, padding, name):
     with tf.variable_scope(name):
-        filt = tf.Variable(tf.random_normal([filter_size[0], filter_size[1], X.shape[3].value, num_op]))
-        b = tf.Variable(tf.zeros([num_op]))
+        filt = tf.get_variable("filter", shape=[filter_size[0], filter_size[1], X.shape[3].value, num_op], initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable("bias", shape=[num_op], initializer=tf.zeros_initializer())
         act = tf.nn.relu(tf.nn.conv2d(X, filt, stride, padding) + b, name)
         tf.summary.histogram("weights", filt)
         tf.summary.histogram("biases", b)
@@ -113,8 +113,8 @@ def add_conv_layer(X, filter_size, num_op, stride, padding, name):
 
 def add_dense(X, num_op, name, activation=''):
     with tf.variable_scope(name):
-        W = tf.Variable(tf.random_normal([X.shape[1].value,num_op]))
-        b = tf.Variable(tf.zeros([num_op]))
+        W = tf.get_variable("weights", shape=[X.shape[1].value,num_op], initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable("bias", shape=[num_op], initializer=tf.zeros_initializer())
         Z = tf.matmul(X,W) + b
         if activation == 'relu':
             act = tf.nn.relu(Z)
@@ -199,3 +199,5 @@ def tensorflow_model(X_train, Y_train, epochs):
 
         save_path = saver.save(sess, './models/cifar10-test1.ckpt')
         print("Model saved at: {}".format(save_path))
+
+tensorflow_model(X_train, Y_train, 5)
