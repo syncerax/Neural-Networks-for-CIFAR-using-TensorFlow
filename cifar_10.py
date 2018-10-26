@@ -6,21 +6,22 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import Sequential
-
-def unpickle(file, encoding='bytes'):
-    with open(file, 'rb') as fptr:
-        data = pickle.load(fptr, encoding=encoding)
-    return data
-
-def one_hot_encode(labels, num_classes):
-    return np.identity(num_classes)[labels]
+from sklearn.model_selection import train_test_split
 
 def get_data():
+    def unpickle(file, encoding='bytes'):
+        with open(file, 'rb') as fptr:
+            data = pickle.load(fptr, encoding=encoding)
+        return data
+
+    def one_hot_encode(labels, num_classes):
+        return np.identity(num_classes)[labels]
+    
     files = ["cifar-10-batches-py/data_batch_1",
-        "cifar-10-batches-py/data_batch_2",
-        "cifar-10-batches-py/data_batch_3",
-        "cifar-10-batches-py/data_batch_4",
-        "cifar-10-batches-py/data_batch_5"
+             "cifar-10-batches-py/data_batch_2",
+             "cifar-10-batches-py/data_batch_3",
+             "cifar-10-batches-py/data_batch_4",
+             "cifar-10-batches-py/data_batch_5"
     ]
 
     X_train = np.zeros((50000, 3072))
@@ -79,7 +80,11 @@ def get_mini_batches(X, Y, mini_batch_size):
 def add_conv_layer(X, filter_size, num_op, stride, padding, name):
     filt = tf.Variable(tf.random_normal([filter_size[0], filter_size[1], X.shape[3].value, num_op]))
     b = tf.Variable(tf.zeros([num_op]))
-    return tf.nn.relu(tf.nn.conv2d(X, filt, stride, padding) + b, name = name)
+    act = tf.nn.relu(tf.nn.conv2d(X, filt, stride, padding) + b, name = name)
+    tf.summary.histogram("weights_" + name, filt)
+    tf.summary.histogram("biases_" + name, b)
+    tf.summary.histogram("activations_" + name, act)
+    return act
 
 def add_dense(X, num_op):
     W = tf.Variable(tf.random_normal([X.shape[1].value,num_op]))
@@ -106,55 +111,79 @@ for cnt1 in range(5):
 f.tight_layout()
 plt.show()
 
-# model = Sequential([
-#     Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)),
-#     Conv2D(32, (3, 3), activation='relu'),
-#     MaxPooling2D(pool_size=(2, 2)),
-#     Dropout(0.25),
-#     Flatten(),
-#     Dense(128, activation='relu'),
-#     Dropout(0.5),
-#     Dense(10, activation='softmax')
-# ])
+def keras_model(X_train, Y_train, epochs):
+    X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, test_size=0.15, random_state=1)
+    model = Sequential([
+        Conv2D(64, (3, 3), activation='relu', input_shape=(32, 32, 3)),
+        Conv2D(64, (3, 3), activation='relu'),
+        MaxPooling2D(pool_size=(2, 2)),
+        Dropout(0.25),
+        Flatten(),
+        Dense(256, activation='relu'),
+        Dropout(0.5),
+        Dense(10, activation='softmax')
+    ])
 
-# model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    logger = keras.callbacks.TensorBoard(
+        log_dir='cifar10-logs/',
+        histogram_freq=1,
+        write_graph=True
+    )
 
-# model.fit(X_train, Y_train, epochs=1, batch_size=128)
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
-X = tf.placeholder(tf.float32, [None,32,32,3], name = 'X')
-Y = tf.placeholder(tf.float32, [None,10], name = 'Y')
+    model.fit(X_train, Y_train, validation_data=(X_val, Y_val), epochs=epochs, batch_size=128, callbacks = [logger])
+    return model
 
-conv1 = add_conv_layer(X, [3,3], 32, [1,1,1,1], 'VALID', 'conv1')
-conv2 = add_conv_layer(conv1, [3,3], 32, [1,1,1,1], 'VALID', 'conv2')
-mp = tf.nn.max_pool(conv2, [1,2,2,1], [1,2,2,1], 'VALID', name = 'mp')
-drop1 = tf.nn.dropout(mp, 0.25, name = 'drop1')
-flat = tf.reshape(drop1, [-1, drop1.shape[1].value * drop1.shape[2].value * drop1.shape[3].value], name = 'flat')
-dense = tf.nn.relu(add_dense(flat, 128), name = 'dense')
-drop2 = tf.nn.dropout(dense, 0.5, name = 'drop2')
-logits = add_dense(drop2, 10)
-loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=Y), name="xent")
-train_step = tf.train.AdamOptimizer().minimize(loss)
+model = keras_model(X_train, Y_train, 3)
+model.save("keras_model_1.h5")
+# X = tf.placeholder(tf.float32, [None,32,32,3], name = 'X')
+# Y = tf.placeholder(tf.float32, [None,10], name = 'Y')
 
-correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(Y, 1))
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+# conv1 = add_conv_layer(X, [3,3], 64, [1,1,1,1], 'VALID', 'conv1')
+# conv2 = add_conv_layer(conv1, [3,3], 64, [1,1,1,1], 'VALID', 'conv2')
+# mp = tf.nn.max_pool(conv2, [1,2,2,1], [1,2,2,1], 'VALID', name = 'mp')
+# drop1 = tf.nn.dropout(mp, 0.25, name = 'drop1')
+# flat = tf.reshape(drop1, [-1, drop1.shape[1].value * drop1.shape[2].value * drop1.shape[3].value], name = 'flat')
+# dense = tf.nn.relu(add_dense(flat, 256), name = 'dense')
+# drop2 = tf.nn.dropout(dense, 0.5, name = 'drop2')
+# logits = add_dense(drop2, 10)
+# loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=Y), name="xent")
+# train_step = tf.train.AdamOptimizer().minimize(loss)
 
-init = tf.global_variables_initializer()
-epochs = 1
-history = []
-sess = tf.Session()
-sess.run(init)
-for epoch in range(epochs):
-    mini_batches = get_mini_batches(X_train, Y_train, 128)
-    for i, mini_batch in enumerate(mini_batches):
-        dummy, c = sess.run([train_step, loss], feed_dict={
-                X: mini_batch['X'],
-                Y: mini_batch['Y']
-            })
-        if (i + 1) % 10 == 0:
-            print("Minibatch {}: Cost {}".format(i + 1, c))
-            train_accuracy = sess.run(accuracy, feed_dict={X: mini_batches[0]['X'], Y: mini_batches[0]['Y']})
-            print("Train accuracy::", train_accuracy)
-        history.append(c)
-    print("Epoch {} completed.".format(epoch + 1))
+# correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(Y, 1))
+# accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-sess.close()
+# with tf.variable_scope('summary'):
+#     tf.summary.scalar('current_cost', loss)
+#     tf.summary.scalar('current_accuracy', accuracy)
+#     summary = tf.summary.merge_all()
+
+# init = tf.global_variables_initializer()
+# epochs = 1
+# history = []
+
+# saver = tf.train.Saver()
+
+# sess = tf.Session()
+# sess.run(init)
+# training_writer = tf.summary.FileWriter("./cifar10-logs/training", sess.graph)
+# for epoch in range(epochs):
+#     mini_batches = get_mini_batches(X_train, Y_train, 128)
+#     for i, mini_batch in enumerate(mini_batches):
+#         dummy, c = sess.run([train_step, loss], feed_dict={
+#                 X: mini_batch['X'],
+#                 Y: mini_batch['Y']
+#             })
+#         if (i + 1) % 10 == 0:
+#             print("Minibatch {}: Cost {}".format(i + 1, c))
+#             train_accuracy = sess.run(accuracy, feed_dict={X: mini_batches[i]['X'], Y: mini_batches[i]['Y']})
+#             print("Train accuracy::", train_accuracy)
+#         history.append(c)
+#     print("Epoch {} completed.".format(epoch + 1))
+#     train_summary = sess.run(summary, feed_dict={X: X_train, Y: Y_train})
+#     training_writer.add_summary(train_summary, epoch)
+
+# save_path = saver.save(sess, './models/cifar10-test1.ckpt')
+# print("Model saved at: {}".format(save_path))
+# sess.close()
