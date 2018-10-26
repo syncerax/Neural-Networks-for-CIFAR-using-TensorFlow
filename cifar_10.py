@@ -8,6 +8,7 @@ from tensorflow.keras.layers import *
 from tensorflow.keras.models import Sequential
 from sklearn.model_selection import train_test_split
 
+
 def get_data():
     def unpickle(file, encoding='bytes'):
         with open(file, 'rb') as fptr:
@@ -53,6 +54,26 @@ def get_data():
 
     return X_train, X_test, Y_train, Y_test, class_names
 
+
+X_train, X_test, Y_train, Y_test, class_names = get_data()
+
+print("Shape of training images:", X_train.shape)
+print("Shape of training labels:", Y_train.shape)
+print("Shape of testing images:", X_test.shape)
+print("Shape of testing labels:", Y_test.shape)
+
+f, axarr = plt.subplots(5,5)
+for cnt1 in range(5):
+    for cnt2 in range(5):
+        num = random.randint(1,X_train.shape[0])
+        axarr[cnt1,cnt2].imshow(X_train[num])
+        axarr[cnt1,cnt2].set_title(class_names[np.argmax(Y_train[num])])
+        axarr[cnt1,cnt2].set_xticks([])
+        axarr[cnt1,cnt2].set_yticks([])
+
+f.tight_layout()
+plt.show()
+
 def get_mini_batches(X, Y, mini_batch_size):
     m = X.shape[0]
     permutation = np.random.permutation(m)
@@ -74,42 +95,38 @@ def get_mini_batches(X, Y, mini_batch_size):
             'X': X[num_mini_batches * mini_batch_size :],
             'Y': Y[num_mini_batches * mini_batch_size :]
         })
+        num_mini_batches += 1
 
-    return mini_batches
+    return mini_batches, num_mini_batches
+
 
 def add_conv_layer(X, filter_size, num_op, stride, padding, name):
-    filt = tf.Variable(tf.random_normal([filter_size[0], filter_size[1], X.shape[3].value, num_op]))
-    b = tf.Variable(tf.zeros([num_op]))
-    act = tf.nn.relu(tf.nn.conv2d(X, filt, stride, padding) + b, name = name)
-    tf.summary.histogram("weights_" + name, filt)
-    tf.summary.histogram("biases_" + name, b)
-    tf.summary.histogram("activations_" + name, act)
+    with tf.variable_scope(name):
+        filt = tf.Variable(tf.random_normal([filter_size[0], filter_size[1], X.shape[3].value, num_op]))
+        b = tf.Variable(tf.zeros([num_op]))
+        act = tf.nn.relu(tf.nn.conv2d(X, filt, stride, padding) + b, name)
+        tf.summary.histogram("weights", filt)
+        tf.summary.histogram("biases", b)
+        tf.summary.histogram("activations", act)
     return act
 
-def add_dense(X, num_op):
-    W = tf.Variable(tf.random_normal([X.shape[1].value,num_op]))
-    b = tf.Variable(tf.zeros([num_op]))
-    return tf.matmul(X,W) + b
 
+def add_dense(X, num_op, name, activation=''):
+    with tf.variable_scope(name):
+        W = tf.Variable(tf.random_normal([X.shape[1].value,num_op]))
+        b = tf.Variable(tf.zeros([num_op]))
+        Z = tf.matmul(X,W) + b
+        if activation == 'relu':
+            act = tf.nn.relu(Z)
+        elif activation == 'softmax':
+            act = tf.nn.softmax(Z)
+        elif activation == '':
+            act = Z
+        tf.summary.histogram("weights", W)
+        tf.summary.histogram("biases", b)
+        tf.summary.histogram("activations", act)
+    return act
 
-X_train, X_test, Y_train, Y_test, class_names = get_data()
-
-print("Shape of training images:", X_train.shape)
-print("Shape of training labels:", Y_train.shape)
-print("Shape of testing images:", X_test.shape)
-print("Shape of testing labels:", Y_test.shape)
-
-f, axarr = plt.subplots(5,5)
-for cnt1 in range(5):
-    for cnt2 in range(5):
-        num = random.randint(1,X_train.shape[0])
-        axarr[cnt1,cnt2].imshow(X_train[num])
-        axarr[cnt1,cnt2].set_title(class_names[np.argmax(Y_train[num])])
-        axarr[cnt1,cnt2].set_xticks([])
-        axarr[cnt1,cnt2].set_yticks([])
-
-f.tight_layout()
-plt.show()
 
 def keras_model(X_train, Y_train, epochs):
     X_train, X_val, Y_train, Y_val = train_test_split(X_train, Y_train, test_size=0.15, random_state=1)
@@ -135,55 +152,50 @@ def keras_model(X_train, Y_train, epochs):
     model.fit(X_train, Y_train, validation_data=(X_val, Y_val), epochs=epochs, batch_size=128, callbacks = [logger])
     return model
 
-model = keras_model(X_train, Y_train, 3)
-model.save("keras_model_1.h5")
-# X = tf.placeholder(tf.float32, [None,32,32,3], name = 'X')
-# Y = tf.placeholder(tf.float32, [None,10], name = 'Y')
 
-# conv1 = add_conv_layer(X, [3,3], 64, [1,1,1,1], 'VALID', 'conv1')
-# conv2 = add_conv_layer(conv1, [3,3], 64, [1,1,1,1], 'VALID', 'conv2')
-# mp = tf.nn.max_pool(conv2, [1,2,2,1], [1,2,2,1], 'VALID', name = 'mp')
-# drop1 = tf.nn.dropout(mp, 0.25, name = 'drop1')
-# flat = tf.reshape(drop1, [-1, drop1.shape[1].value * drop1.shape[2].value * drop1.shape[3].value], name = 'flat')
-# dense = tf.nn.relu(add_dense(flat, 256), name = 'dense')
-# drop2 = tf.nn.dropout(dense, 0.5, name = 'drop2')
-# logits = add_dense(drop2, 10)
-# loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=Y), name="xent")
-# train_step = tf.train.AdamOptimizer().minimize(loss)
+# model = keras_model(X_train, Y_train, 3)
+# model.save("keras_model_1.h5")
 
-# correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(Y, 1))
-# accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-# with tf.variable_scope('summary'):
-#     tf.summary.scalar('current_cost', loss)
-#     tf.summary.scalar('current_accuracy', accuracy)
-#     summary = tf.summary.merge_all()
+def tensorflow_model(X_train, Y_train, epochs):
+    X = tf.placeholder(tf.float32, [None,32,32,3], name = 'X')
+    Y = tf.placeholder(tf.float32, [None,10], name = 'Y')
 
-# init = tf.global_variables_initializer()
-# epochs = 1
-# history = []
+    conv1 = add_conv_layer(X, [3,3], 64, [1,1,1,1], 'VALID', 'conv1')
+    conv2 = add_conv_layer(conv1, [3,3], 64, [1,1,1,1], 'VALID', 'conv2')
+    mp = tf.nn.max_pool(conv2, [1,2,2,1], [1,2,2,1], 'VALID', name = 'max_pool')
+    drop1 = tf.nn.dropout(mp, 0.25, name = 'drop1')
+    flat = tf.reshape(drop1, [-1, drop1.shape[1].value * drop1.shape[2].value * drop1.shape[3].value], name = 'flat')
+    dense = add_dense(flat, 256, name='dense1', activation='relu')
+    drop2 = tf.nn.dropout(dense, 0.5, name = 'drop2')
+    logits = add_dense(drop2, 10, name='dense2', activation='')
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=Y), name="xent")
+    train_step = tf.train.AdamOptimizer().minimize(loss)
+    predict = tf.argmax(logits, 1)
+    correct_prediction = tf.equal(predict, tf.argmax(Y, 1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-# saver = tf.train.Saver()
+    with tf.variable_scope('summary'):
+        tf.summary.scalar('current_cost', loss)
+        tf.summary.scalar('current_accuracy', accuracy)
+        summary = tf.summary.merge_all()
 
-# sess = tf.Session()
-# sess.run(init)
-# training_writer = tf.summary.FileWriter("./cifar10-logs/training", sess.graph)
-# for epoch in range(epochs):
-#     mini_batches = get_mini_batches(X_train, Y_train, 128)
-#     for i, mini_batch in enumerate(mini_batches):
-#         dummy, c = sess.run([train_step, loss], feed_dict={
-#                 X: mini_batch['X'],
-#                 Y: mini_batch['Y']
-#             })
-#         if (i + 1) % 10 == 0:
-#             print("Minibatch {}: Cost {}".format(i + 1, c))
-#             train_accuracy = sess.run(accuracy, feed_dict={X: mini_batches[i]['X'], Y: mini_batches[i]['Y']})
-#             print("Train accuracy::", train_accuracy)
-#         history.append(c)
-#     print("Epoch {} completed.".format(epoch + 1))
-#     train_summary = sess.run(summary, feed_dict={X: X_train, Y: Y_train})
-#     training_writer.add_summary(train_summary, epoch)
+    init = tf.global_variables_initializer()
 
-# save_path = saver.save(sess, './models/cifar10-test1.ckpt')
-# print("Model saved at: {}".format(save_path))
-# sess.close()
+    saver = tf.train.Saver()
+
+    with tf.Session() as sess:
+        sess.run(init)
+        training_writer = tf.summary.FileWriter("./cifar10-logs/training", sess.graph)
+        for epoch in range(epochs):
+            mini_batches, num_mini_batches = get_mini_batches(X_train, Y_train, 128)
+            for i, mini_batch in enumerate(mini_batches):
+                sess.run(train_step, feed_dict={X: mini_batch['X'], Y: mini_batch['Y']})
+                if (i + 1) % 10 == 0:
+                    c, train_accuracy, train_summary = sess.run([loss, accuracy, summary], feed_dict={X: mini_batches[i]['X'], Y: mini_batches[i]['Y']})
+                    training_writer.add_summary(train_summary, epoch * num_mini_batches + i)
+                    print("Minibatch {}: Cost {}, Train accuracy: {}".format(i + 1, c, train_accuracy))
+            print("Epoch {} completed.".format(epoch + 1))
+
+        save_path = saver.save(sess, './models/cifar10-test1.ckpt')
+        print("Model saved at: {}".format(save_path))
